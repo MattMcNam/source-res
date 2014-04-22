@@ -11,11 +11,10 @@ Usage
 `sr_forceres [width] [height]`  
 Forces the game to switch to this width and height.  
   
-Warning
+Fullscreen mode
 -
-I have not tested what happens in fullscreen.  
-It will not work in fullscreen, but I don't know if it will put the game in windowed mode or try to force your monitor to that resolution (a bad thing!)
-*Run in windowed mode!*  
+If you switch to an unsupported resolution in fullscreen, you will get a black screen.  
+Use windowed mode.  
 
 Supported games
 -
