@@ -51,6 +51,18 @@ bool SequencePlugin::Load( CreateInterfaceFn interfaceFactory, CreateInterfaceFn
 	CreateInterfaceFn pfnEngine = (CreateInterfaceFn) GetFuncAddress(hmEngine, "CreateInterface");
 	pGameUIFuncs = (IGameUIFuncs*) pfnEngine("VENGINE_GAMEUIFUNCS_VERSION005", NULL);
 
+	if (!pMaterialSystem)
+		Warning("[SR] Unable to get IMaterialSystem!\n");
+
+	if (!pSurface)
+		Warning("[SR] Unable to get vgui::ISurface!\n");
+
+	if (!pShader)
+		Warning("[SR] Unable to get IShaderAPI!\n");
+
+	if (!pGameUIFuncs)
+		Warning("[SR] Unable to get IGameUIFuncs!\n");
+
 	// Register cvars & concommands
 	ConVar_Register( 0 );
 	return true;
@@ -85,26 +97,24 @@ void SequencePlugin::OnQueryCvarValueFinished( QueryCvarCookie_t iCookie, edict_
 void SequencePlugin::OnEdictAllocated( edict_t *edict ){}
 void SequencePlugin::OnEdictFreed( const edict_t *edict ){}
 
-static void ConvertModeStruct( ShaderDeviceInfo_t *pMode, const MaterialSystem_Config_t &config ) 
+static void ConvertModeStruct( ShaderDeviceInfo_t *pMode, const MaterialSystem_Config_t &config )
 {
-	pMode->m_DisplayMode.m_nWidth = config.m_VideoMode.m_Width;					
+	pMode->m_DisplayMode.m_nWidth = config.m_VideoMode.m_Width;
 	pMode->m_DisplayMode.m_nHeight = config.m_VideoMode.m_Height;
-	pMode->m_DisplayMode.m_Format = config.m_VideoMode.m_Format;			
-	pMode->m_DisplayMode.m_nRefreshRateNumerator = config.m_VideoMode.m_RefreshRate;	
-	pMode->m_DisplayMode.m_nRefreshRateDenominator = config.m_VideoMode.m_RefreshRate ? 1 : 0;	
-	pMode->m_nBackBufferCount = 1;			
+	pMode->m_DisplayMode.m_nRefreshRateNumerator = config.m_VideoMode.m_RefreshRate;
+	pMode->m_DisplayMode.m_nRefreshRateDenominator = config.m_VideoMode.m_RefreshRate ? 1 : 0;
+	pMode->m_nBackBufferCount = 1;
 	pMode->m_nAASamples = config.m_nAASamples;
 	pMode->m_nAAQuality = config.m_nAAQuality;
-	pMode->m_nDXLevel = config.dxSupportLevel;					
-	pMode->m_nWindowedSizeLimitWidth = (int)config.m_WindowedSizeLimitWidth;	
+	pMode->m_nDXLevel = config.dxSupportLevel;
+	pMode->m_nWindowedSizeLimitWidth = (int)config.m_WindowedSizeLimitWidth;
 	pMode->m_nWindowedSizeLimitHeight = (int)config.m_WindowedSizeLimitHeight;
 
 	pMode->m_bWindowed = config.Windowed();
-	pMode->m_bResizing = config.Resizing();			
+	pMode->m_bResizing = config.Resizing();
 	pMode->m_bUseStencil = config.Stencil();
-	pMode->m_bLimitWindowedSize = config.LimitWindowedSize();	
-	pMode->m_bWaitForVSync = config.WaitForVSync();	
-	pMode->m_bScaleToOutputResolution = config.ScaleToOutputResolution();
+	pMode->m_bLimitWindowedSize = config.LimitWindowedSize();
+	pMode->m_bWaitForVSync = config.WaitForVSync();
 	pMode->m_bUsingMultipleWindows = config.UsingMultipleWindows();
 }
 
@@ -118,14 +128,19 @@ static void sr_forceres( const CCommand& args )
 	int w = atoi(args.Arg(1));
 	int h = atoi(args.Arg(2));
 	
+	// Override a videomode to match the given w&h
+	// Seems to be the magic trick needed for startmovie to detect the new resolution
 	vmode_t *plist = NULL;
 	int iCount = 0;
 	pGameUIFuncs->GetVideoModes(&plist, &iCount);
 	plist[0].width = w;
 	plist[0].height = h;
 
+	// Resize VGUI surface
+	// This is what resizes the window
 	pSurface->ForceScreenSizeOverride(true, w, h);
 	
+	// Copy the current material system config in order to override the width & height
 	const MaterialSystem_Config_t &currentConfig = pMaterialSystem->GetCurrentConfigForVideoCard();
 
 	MaterialSystem_Config_t config = currentConfig;
@@ -134,9 +149,11 @@ static void sr_forceres( const CCommand& args )
 	config.m_VideoMode.m_Height = h;
 	config.SetFlag(MATSYS_VIDCFG_FLAGS_LIMIT_WINDOWED_SIZE, false);
 
+	// Seems to trigger startmovie to pick up the new resolution
 	ShaderDeviceInfo_t deviceInfo;
-	ConvertModeStruct(&deviceInfo, config);
+	ConvertModeStruct(&deviceInfo, config); // TODO: Is there a better, built-in way to do this in the SDK?
 	pShader->ChangeVideoMode(deviceInfo);
 
+	// Resies the game's UI elements
 	pMaterialSystem->OverrideConfig(config, true);
 }
